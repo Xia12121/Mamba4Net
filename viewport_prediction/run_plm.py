@@ -133,8 +133,8 @@ def adapt(args, pipeline, dataloader_train, dataloader_valid, models_dir, grad_a
                 loss = pipeline(history, future, video_user_info, teacher_forcing=True)
             tot_loss += loss.item()
             loss = loss / grad_accum_steps
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(pipeline.plm.parameters(), 1.0)
+            loss.backward() # update gradients
+            torch.nn.utils.clip_grad_norm_(pipeline.plm.parameters(), 1.0) # clip gradients to avoid exploding gradients
 
             # perform gradient accumulation update
             if ((step + 1) % grad_accum_steps == 0) or (step + 1 == len(dataloader_train)):
