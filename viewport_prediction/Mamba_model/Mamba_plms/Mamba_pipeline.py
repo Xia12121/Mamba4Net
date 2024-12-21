@@ -101,16 +101,14 @@ class Mamba_pipeline(nn.Module):
             inputs_embeds=x,
             attention_mask=torch.ones(x.shape[0], x.shape[1], dtype=torch.long, device=self.device),
             output_hidden_states=True,  # 为了拿到隐藏层
-            return_dict=True,
-            teacher_forcing=teacher_forcing  # 如果 plm 自定义 forward 支持 teacher_forcing 的话
+            return_dict=True
         )
 
         student_out = self.mamba_plm(
             inputs_embeds=x,
             attention_mask=torch.ones(x.shape[0], x.shape[1], dtype=torch.long, device=self.device),
             output_hidden_states=True,
-            return_dict=True,
-            teacher_forcing=teacher_forcing
+            return_dict=True
         )
 
         # 3. 分别计算教师模型和学生模型的损失
