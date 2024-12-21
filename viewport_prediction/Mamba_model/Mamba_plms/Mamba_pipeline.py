@@ -16,7 +16,7 @@ class Mamba_pipeline(nn.Module):
     '''
     def __init__(self,
                  plm: PreTrainedModel,
-                 mamba_plm,  # 这里用你的 MambaModel 或者对应类
+                 mamba_plm,  # 这里用你的 MambaModel 或者对应类 (学生模型)
                  loss_func = None,
                  fut_window = None,
                  device = 'cuda',
@@ -24,7 +24,7 @@ class Mamba_pipeline(nn.Module):
                  frequency = 5,
                  using_multimodal = False,
                  dataset = None,
-                 alpha_kl = 1.0  # KL损失在总loss中的权重，可自己调整
+                 alpha_kl = 1.0  # KL损失在总loss中的权重，可自行调节
                 ):
         """
         :param plm: the pretrained LLM (teacher model)
@@ -39,7 +39,7 @@ class Mamba_pipeline(nn.Module):
         """
         super().__init__()
         self.plm = plm
-        self.mamba_plm = mamba_plm  # 学生模型，用来做知识蒸馏
+        self.mamba_plm = mamba_plm  # 学生模型
         self.using_multimodal = using_multimodal
         self.dataset = dataset
         self.device = device
@@ -58,10 +58,10 @@ class Mamba_pipeline(nn.Module):
         self.embed_multimodal = nn.Linear(768, embed_size).to(device)  # 768 = ViT output feature size
         self.embed_ln = nn.LayerNorm(self.embed_size).to(device)
 
-        # 用来在 get_multimodal_information 里缓存读取好的特征
+        # 用来在 get_multimodal_information 中缓存读取好的特征
         self.loaded_tensor_cache = {}
 
-        # 下面的 modules_except_plm 只示例保留了 plm 里的 networking_head，具体可根据项目需要调整
+        # 根据项目需要把除 plm 外的关键层加进来
         self.modules_except_plm = nn.ModuleList([
             self.embed_vp,
             self.embed_multimodal,
@@ -72,7 +72,7 @@ class Mamba_pipeline(nn.Module):
 
         if loss_func is None:
             loss_func = nn.MSELoss()
-        self.loss_fct = loss_func  # 用于端到端的预测误差
+        self.loss_fct = loss_func  # 用于教师或学生的端到端监督误差
 
         # 用于逐层隐藏状态的 KL 散度损失
         # 在 PyTorch 中常见的 KLDivLoss 需要输入 log_prob 和 prob
@@ -80,12 +80,14 @@ class Mamba_pipeline(nn.Module):
 
         self.fut_window = fut_window
     
-    def forward(self, batch, future, video_user_position, teacher_forcing=True) -> torch.Tensor:
+    def forward(self, batch, future, video_user_position, teacher_forcing=True) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         :param batch: history viewport trajectory
         :param future: future viewport trajectory
         :param video_user_position: details information for current trajectory
-        :return: the combined loss (E2E + layer-wise KL)
+        :return: (teacher_loss, student_loss)
+            teacher_loss: 教师模型的端到端监督损失
+            student_loss: 学生模型端到端监督损失 + KL 散度损失
         """
         # 1. 准备输入特征(embedding)
         x = self._prepare_sequence_embeddings(batch, future, video_user_position, teacher_forcing)
@@ -100,7 +102,7 @@ class Mamba_pipeline(nn.Module):
             attention_mask=torch.ones(x.shape[0], x.shape[1], dtype=torch.long, device=self.device),
             output_hidden_states=True,  # 为了拿到隐藏层
             return_dict=True,
-            teacher_forcing=teacher_forcing  # 仅在你自定义的plm支持teacher_forcing时可用
+            teacher_forcing=teacher_forcing  # 如果 plm 自定义 forward 支持 teacher_forcing 的话
         )
 
         student_out = self.mamba_plm(
@@ -111,13 +113,17 @@ class Mamba_pipeline(nn.Module):
             teacher_forcing=teacher_forcing
         )
 
-        # 3. 计算端到端预测误差
-        # teacher_out.logits 是教师模型输出，仅在蒸馏时使用，
-        # student_out.logits 是学生模型输出，需要和未来GT比较。
-        gt = future.to(self.device)
-        e2e_loss = self.loss_fct(student_out.logits, gt)
+        # 3. 分别计算教师模型和学生模型的损失
 
-        # 4. 计算逐层 KL 散度
+        # 3.1 教师模型端到端损失(teacher_loss)
+        # 这里一般就是对 teacher_out.logits 和 ground truth 做监督
+        gt = future.to(self.device)
+        teacher_loss = self.loss_fct(teacher_out.logits, gt)
+
+        # 3.2 学生模型端到端损失(student_e2e_loss) + KL散度损失
+        student_e2e_loss = self.loss_fct(student_out.logits, gt)
+
+        # 计算逐层 KL 散度
         # 假设 teacher_out.hidden_states 和 student_out.hidden_states 的长度相同
         # 如果层数不一致，需要自己做好层的对齐和映射
         layer_kl_loss = 0.0
@@ -125,7 +131,7 @@ class Mamba_pipeline(nn.Module):
         student_hidden_states = student_out.hidden_states
         
         # 通常 hidden_states[0] 是 embedding 输出, hidden_states[-1] 是最后一层输出
-        # 大多数情况下会对中间的 N 层做蒸馏(可以自己控制范围)
+        # 大多数情况下会对中间的几层做蒸馏(可以自己控制哪些层做对齐)
         for t_hid, s_hid in zip(teacher_hidden_states, student_hidden_states):
             # KLDivLoss 需要 log_prob vs prob
             # 所以对学生做 log_softmax，对教师做 softmax
@@ -134,14 +140,19 @@ class Mamba_pipeline(nn.Module):
 
             layer_kl_loss += self.kl_div(s_log_prob, t_prob)
 
-        # 5. 综合损失: e2e_loss + alpha_kl * layer_kl_loss
-        total_loss = e2e_loss + self.alpha_kl * layer_kl_loss
-        return total_loss
+        # 最终学生的损失
+        student_loss = student_e2e_loss + self.alpha_kl * layer_kl_loss
+
+        # 4. 返回 (teacher_loss, student_loss)
+        # 在训练逻辑里可以分别对 teacher_loss.backward() 和 student_loss.backward()，
+        # 或者根据需求只回传学生梯度。
+        return teacher_loss, student_loss
 
     def _prepare_sequence_embeddings(self, batch, future, video_user_position, teacher_forcing):
         """
         按照原始 pipeline 的思路，得到 [batch_size, seq_len, embed_dim] 的输入。
-        你可以将该部分从 auto_regressive / teaching_forcing 中抽象出来，便于同时给 teacher/student 送同样的输入。
+        如果是 teacher_forcing=True，则把 future 拼到序列后面；
+        如果是 auto-regressive，则只拿 history。
         """
         if teacher_forcing:
             # teaching_forcing 的情况
@@ -206,6 +217,11 @@ class Mamba_pipeline(nn.Module):
         mapped_tensor = self.embed_multimodal(load_tensor)  # [batch_size, embed_size]，假如是1条则 [1, embed_size]
         mapped_tensor = mapped_tensor.unsqueeze(1)  # [batch_size, 1, embed_size]
         return mapped_tensor
+
+    # 如果需要保留原 auto_regressive / teaching_forcing / inference 等逻辑，也可以在此处自行添加。
+    # 但要注意，你现在的 forward 做的是【一次同时跑 teacher & student】，并分别返回两种 loss。
+    # 具体训练调用时，可根据需要拆分或合并。
+
 
     def auto_regressive(self, x, future, video_user_position) -> torch.Tensor:
         """
