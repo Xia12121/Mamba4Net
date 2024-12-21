@@ -3,8 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Optional, Tuple, Union
 from transformers.modeling_outputs import CausalLMOutputWithPast
-
-# 假设你安装/定义了 mamba_ssm 包，其中有 Mamba2 类
 from mamba_ssm import Mamba2
 
 class MambaLlamaNetworkingHeadModel(nn.Module):
