@@ -1,0 +1,69 @@
+# Cluster Job Scheduling configuration
+task: cjs
+paradigm: reinforcement
+seed: 42
+
+teacher:
+  name_or_path: meta-llama/Llama-2-7b-hf
+  embed_dim: 4096
+  num_layers: 48
+  num_heads: 32
+  use_lora: true
+  lora_rank: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  lora_target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+student:
+  embed_dim: 512
+  num_mamba_layers: 10
+  num_transformer_layers: 2
+  transformer_position: tail
+  num_heads: 8
+  ffn_mult: 4
+  dropout: 0.1
+  ssm_d_state: 16
+  ssm_d_conv: 4
+  ssm_expand: 2
+
+encoder:
+  node_feat_dim: 5             # node task features (work_remaining, tasks_left, ...)
+  gnn_hidden: 256
+  gnn_layers: 3
+  gnn_type: gcn
+
+head:
+  max_stages: 128
+  num_executor_choices: 16     # Decima default discrete executor buckets
+
+distillation:
+  alpha: 0.5
+  temperature: 2.0
+  beta: 0.5
+  teacher_max_seq_len: 256
+
+train:
+  batch_size: 8
+  lr: 3e-4
+  teacher_lr: 1e-4
+  weight_decay: 0.01
+  episodes: 50000
+  rollout_len: 256
+  ppo_epochs: 4
+  gamma: 1.0                   # no discounting for JCT
+  gae_lambda: 0.95
+  clip_ratio: 0.2
+  entropy_coef: 0.01
+  value_coef: 0.5
+  grad_clip: 1.0
+  optimizer: adamw
+  log_interval: 200
+  eval_interval: 2000
+  checkpoint_dir: checkpoints/cjs
+
+data:
+  traces: data/cjs/tpch
+
+cwr:
+  enabled: true
+  rank: 64

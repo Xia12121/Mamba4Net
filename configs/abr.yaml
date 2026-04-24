@@ -1,0 +1,76 @@
+# Adaptive Bitrate Streaming configuration
+task: abr
+paradigm: reinforcement
+seed: 42
+
+teacher:
+  name_or_path: meta-llama/Llama-2-7b-hf
+  embed_dim: 4096
+  num_layers: 48
+  num_heads: 32
+  use_lora: true
+  lora_rank: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  lora_target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+student:
+  embed_dim: 512
+  num_mamba_layers: 10
+  num_transformer_layers: 2
+  transformer_position: tail
+  num_heads: 8
+  ffn_mult: 4
+  dropout: 0.1
+  ssm_d_state: 16
+  ssm_d_conv: 4
+  ssm_expand: 2
+
+encoder:
+  throughput_dim: 8            # past k throughput values
+  delay_dim: 8
+  chunk_size_dim: 6            # 6 bitrate chunks
+  buffer_dim: 1
+  hidden: 256
+
+head:
+  num_bitrates: 6              # categorical over 6 bitrates (Pensieve default)
+
+distillation:
+  alpha: 0.5
+  temperature: 2.0
+  beta: 0.5
+  teacher_max_seq_len: 256
+
+train:
+  batch_size: 32
+  lr: 3e-4
+  teacher_lr: 1e-4
+  weight_decay: 0.01
+  episodes: 100000
+  rollout_len: 32
+  ppo_epochs: 4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_ratio: 0.2
+  entropy_coef: 0.01
+  value_coef: 0.5
+  grad_clip: 1.0
+  optimizer: adamw
+  log_interval: 200
+  eval_interval: 5000
+  checkpoint_dir: checkpoints/abr
+
+data:
+  traces: data/abr/traces
+  videos: data/abr/videos
+
+cwr:
+  enabled: true
+  rank: 64
+
+qoe:
+  # Standard Pensieve QoE
+  bitrate_weight: 1.0
+  rebuffer_penalty: 4.3
+  smooth_penalty: 1.0

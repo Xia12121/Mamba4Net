@@ -1,0 +1,75 @@
+# Viewport Prediction configuration
+task: vp
+paradigm: supervised
+seed: 42
+
+teacher:
+  name_or_path: meta-llama/Llama-2-7b-hf
+  embed_dim: 4096
+  num_layers: 48
+  num_heads: 32
+  use_lora: true
+  lora_rank: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  lora_target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+student:
+  embed_dim: 512
+  num_mamba_layers: 10
+  num_transformer_layers: 2
+  transformer_position: tail   # tail = near output (last 2 blocks)
+  num_heads: 8
+  ffn_mult: 4
+  dropout: 0.1
+  vocab_size: 32000            # for generative heads (unused here)
+  ssm_d_state: 16
+  ssm_d_conv: 4
+  ssm_expand: 2
+
+encoder:
+  # Time-series (past viewports)
+  ts_input_dim: 2              # (yaw, pitch)
+  ts_hidden: 256
+  ts_context: 10               # number of historical viewports
+  # Visual (RGB + motion vectors)
+  use_vit: true
+  vit_name: vit_tiny_patch16_224
+  vit_feature_dim: 192
+  # Projection to student embed_dim
+  proj_dropout: 0.1
+
+head:
+  output_dim: 2                # predicted next (yaw, pitch)
+  future_horizon: 1
+
+distillation:
+  alpha: 0.5                   # KL weight in SL loss
+  temperature: 2.0
+  beta: 0.5                    # reserved for RL tasks
+  teacher_max_seq_len: 256
+
+train:
+  batch_size: 16
+  lr: 3e-4
+  teacher_lr: 1e-4
+  weight_decay: 0.01
+  epochs: 30
+  warmup_ratio: 0.03
+  grad_clip: 1.0
+  optimizer: adamw
+  scheduler: cosine
+  log_interval: 50
+  eval_interval: 500
+  checkpoint_dir: checkpoints/vp
+
+data:
+  root: data/viewport
+  dataset: jin2022              # Jin et al. 360-video viewport dataset
+  fps: 30
+  window_sec: 1.0
+  stride: 5
+
+cwr:
+  enabled: true
+  rank: 64                     # truncation rank for SVD
