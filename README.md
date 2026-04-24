@@ -90,3 +90,23 @@ If you find this work useful, please cite:
   publisher = {IEEE}
 }
 ```
+
+## Acknowledgements
+
+This project is built upon the open-source work of the **NetLLM** team. We
+sincerely thank the authors for releasing their code, which formed the
+foundation of our reproduction pipeline (multi-modal encoders, task
+heads, and reference baselines for VP / ABR / CJS).
+
+- NetLLM repository: <https://github.com/duowuyms/NetLLM>
+
+```bibtex
+@inproceedings{wu2024netllm,
+  title     = {NetLLM: Adapting Large Language Models for Networking},
+  author    = {Wu, Duo and Wang, Xianda and Qiao, Yaqi and Wang, Zhi and Jiang, Junchen and Cui, Shuguang and Wang, Fangxin},
+  booktitle = {Proceedings of the ACM SIGCOMM 2024 Conference},
+  year      = {2024},
+  publisher = {ACM},
+  doi       = {10.1145/3651890.3672268}
+}
+```
