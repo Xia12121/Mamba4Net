@@ -82,11 +82,11 @@ Code released under CC-BY-4.0 (matching the paper).
 If you find this work useful, please cite:
 
 ```bibtex
-@article{xia2025mamba4net,
-  title   = {Mamba4Net: Distilled Hybrid Mamba Large Language Models For Networking},
-  author  = {Xia, Linhan and Yang, Mingzhan and Wang, Jingjing and Yan, Ziwei and Ren, Yakun and Yu, Guo and Lei, Kai},
-  journal = {arXiv preprint arXiv:2510.17147},
-  year    = {2025},
-  url     = {https://arxiv.org/abs/2510.17147}
+@inproceedings{xia2025mamba4net,
+  title     = {Mamba4Net: Distilled Hybrid Mamba Large Language Models For Networking},
+  author    = {Xia, Linhan and Yang, Mingzhan and Wang, Jingjing and Yan, Ziwei and Ren, Yakun and Yu, Guo and Lei, Kai},
+  booktitle = {Proceedings of the IEEE International Conference on Network Protocols (ICNP)},
+  year      = {2025},
+  publisher = {IEEE}
 }
 ```
