@@ -1,6 +1,6 @@
 # Mamba4Net
 
-PyTorch reproduction of **Mamba4Net: Distilled Hybrid Mamba Large Language Models for Networking**
+**Mamba4Net: Distilled Hybrid Mamba Large Language Models for Networking**
 (Xia et al., 2025, arXiv:2510.17147).
 
 The framework transfers networking-specific knowledge from a Transformer-based
